@@ -1,0 +1,10 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/devel/lib/python2.7/dist-packages",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/planner_space/devel/lib/python2.7/dist-packages",
+        "/opt/ros/melodic/lib/python2.7/dist-packages"
+    ],
+    "files.associations": {
+        "iostream": "cpp"
+    }
+}

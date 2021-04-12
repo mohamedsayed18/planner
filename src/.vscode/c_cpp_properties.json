@@ -1,0 +1,27 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "",
+        "limitSymbolsToIncludedHeaders": true
+      },
+      "includePath": [
+        "/opt/ros/melodic/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/planner_space/devel/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/devel/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/src/hagen_planner/bspline_opt/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/src/drone_forest/gazebo_sim/drone_sim/include/**",
+        "/home/mohamed/PX4-Autopilot/Tools/sitl_gazebo/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/src/hagen_planner/mpc_opt/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/src/hagen_planner/path_searching/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/src/hagen_planner/plan_env/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/src/hagen_planner/rebound_opt/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/src/hagen_planner/state_machine/include/**",
+        "/media/mohamed/C03CCDB43CCDA62E/tutorials/Innopolis/Year_2/Project/forest_space/src/hagen_planner/traj_utils/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS"
+    }
+  ],
+  "version": 4
+}
