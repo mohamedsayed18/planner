@@ -1,6 +1,8 @@
 
 #include <state_machine/fsm_trajectory_point_stabilizer.h>
 
+
+
 namespace hagen_planner
 {
 void FSM_Trajectory_Point_Stabilizer::init(ros::NodeHandle& nh)
@@ -83,6 +85,8 @@ void FSM_Trajectory_Point_Stabilizer::init(ros::NodeHandle& nh)
 
 //  state_pub = node_.advertise<visualization_msgs::Marker>("planning_vis/state", 10);
   pos_cmd_pub = node_.advertise<hagen_msgs::PoseCommand>("/planning/pos_cmd", 50);
+
+  rotate_pub = node_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 50);
 
   Eigen::MatrixXd k_A(1, 1); // System dynamics matrix
   Eigen::MatrixXd k_C(1, 1); // Output matrix
@@ -171,6 +175,26 @@ void FSM_Trajectory_Point_Stabilizer::continueExecutionCallback(const std_msgs::
 
 void FSM_Trajectory_Point_Stabilizer::waypointCallback(const nav_msgs::PathConstPtr& msg)
 {
+  if(msg->header.frame_id == "R")
+  {
+    rotate = true;
+    std::cout << "Rotate == True" << std::endl;
+    std_msgs::Empty emt;
+    stop_moving.publish(emt);
+    granted_execution = false;
+    trajectroy_regulator->force_terminate = true;
+
+    cout << "Triggered!" << endl;
+    std::unique_lock<std::mutex> guard(mutex_odom);
+    stop_pose <<  odom.pose.pose.position.x,  odom.pose.pose.position.y,  odom.pose.pose.position.z;
+    intermediate_stop_pose << odom.pose.pose.position.x,  odom.pose.pose.position.y,  odom.pose.pose.position.z, 0, 0, 0;
+    stop_yaw_angle =  getYawFromQuat(odom.pose.pose.orientation);
+    guard.unlock();
+
+    trigger_ = true;
+    return;
+  }
+
   std_msgs::Empty emt;
   stop_moving.publish(emt);
   granted_execution = false;
@@ -454,138 +478,164 @@ std::thread FSM_Trajectory_Point_Stabilizer::execFSMThread() {
     return std::thread([&] { fsmExecutor(); });
 }
 
+
 void FSM_Trajectory_Point_Stabilizer::cmdExecutor() {
   clock_t t2, t1 = clock();
   while(is_allowed_for_execution){
     t2 = clock();
     if((t2-t1) > 0.08){
-      if (!stop_pose_init){
+      if (!rotate)
+      {
+        if (!stop_pose_init)
+        {
         // cout << "FSM_Trajectory_Point_Stabilizer: no odom." << endl;
-      }else{
-
-        Eigen::Vector3d pos, vel, acc;
-        ros::Time time_now = ros::Time::now();
-        int traj_id = 1;
-        
-        // std::cout<< "trajectroy_regulator->still_running" << trajectroy_regulator->still_running << std::endl;
-        nav_msgs::Odometry current_state;
-        // cout<< "========" << trajectroy_regulator->still_running << "  " << trajectroy_regulator->force_terminate << endl;
-        std::unique_lock<std::mutex> guard_pose(mutex_current_pose);
-        current_state = current_pose;
-        // granted_execution_current_pose = true;
-        guard_pose.unlock();
-        // condition_on_current_pose.notify_all();
-
-        Eigen::VectorXd state_vec(4);
-        if(!init_kf_yaw){
-            Eigen::VectorXd k_x0(1);
-            k_x0 << stop_yaw_angle;
-            kf_yaw->init(0, k_x0);
-            init_kf_yaw =  true;
         }
-        // Eigen::Vector3d tmp;
-        // cout<< "========1"<< endl;
-        if(trajectroy_regulator->still_running && !trajectroy_regulator->force_terminate){
-        //  cout<< "========2"<< endl;
-          pos(0) = current_state.pose.pose.position.x;
-          pos(1) = current_state.pose.pose.position.y;
-          pos(2) = current_state.pose.pose.position.z;
-          //  std::cout<< "=======2" << std::endl;
-          current_yaw = current_state.pose.pose.orientation.x;
+        else
+        {
+          Eigen::Vector3d pos, vel, acc;
+          ros::Time time_now = ros::Time::now();
+          int traj_id = 1;
+          
+          // std::cout<< "trajectroy_regulator->still_running" << trajectroy_regulator->still_running << std::endl;
+          nav_msgs::Odometry current_state;
+          // cout<< "========" << trajectroy_regulator->still_running << "  " << trajectroy_regulator->force_terminate << endl;
+          std::unique_lock<std::mutex> guard_pose(mutex_current_pose);
+          current_state = current_pose;
+          // granted_execution_current_pose = true;
+          guard_pose.unlock();
+          // condition_on_current_pose.notify_all();
 
-          state_vec << current_state.twist.twist.linear.x, current_state.twist.twist.linear.y
-                    , current_state.twist.twist.linear.z, current_state.twist.twist.angular.z;
-          vel(0) = (double)(state_vec(0)*cos(current_yaw) - state_vec(1)*sin(current_yaw));
-          vel(1) = (double)(state_vec(0)*sin(current_yaw) + state_vec(1)*cos(current_yaw));
-          vel(2) = current_state.twist.twist.linear.z;
-            //  cout<< "=======3"<< endl;
+          Eigen::VectorXd state_vec(4);
+          if(!init_kf_yaw){
+              Eigen::VectorXd k_x0(1);
+              k_x0 << stop_yaw_angle;
+              kf_yaw->init(0, k_x0);
+              init_kf_yaw =  true;
+          }
+          // Eigen::Vector3d tmp;
+          // cout<< "========1"<< endl;
+          if(trajectroy_regulator->still_running && !trajectroy_regulator->force_terminate){
+          //  cout<< "========2"<< endl;
+            pos(0) = current_state.pose.pose.position.x;
+            pos(1) = current_state.pose.pose.position.y;
+            pos(2) = current_state.pose.pose.position.z;
+            //  std::cout<< "=======2" << std::endl;
+            current_yaw = current_state.pose.pose.orientation.x;
 
-          if(std::abs(vel(0)) < 0.00005 || std::abs(vel(1)) < 0.00005){
-            current_yaw =  kf_yaw->state()[0];
-          }else{
+            state_vec << current_state.twist.twist.linear.x, current_state.twist.twist.linear.y
+                      , current_state.twist.twist.linear.z, current_state.twist.twist.angular.z;
+            vel(0) = (double)(state_vec(0)*cos(current_yaw) - state_vec(1)*sin(current_yaw));
+            vel(1) = (double)(state_vec(0)*sin(current_yaw) + state_vec(1)*cos(current_yaw));
+            vel(2) = current_state.twist.twist.linear.z;
+              //  cout<< "=======3"<< endl;
 
-            Eigen::Vector3d normalized_vector = (vel).normalized();
-            double curr_yaw = std::atan2(normalized_vector[1], normalized_vector[0]);
-            if(normalized_vector[1]<0){
-              curr_yaw += 2*M_PI;
+            if(std::abs(vel(0)) < 0.00005 || std::abs(vel(1)) < 0.00005){
+              current_yaw =  kf_yaw->state()[0];
+            }else{
+
+              Eigen::Vector3d normalized_vector = (vel).normalized();
+              double curr_yaw = std::atan2(normalized_vector[1], normalized_vector[0]);
+              if(normalized_vector[1]<0){
+                curr_yaw += 2*M_PI;
+              }
+
+              Eigen::VectorXd k_y(1);
+              k_y << curr_yaw;
+              kf_yaw->update(k_y);
+              previous_yaw = current_yaw;
+              current_yaw =  kf_yaw->state()[0];
             }
+            
 
+            //  std::cout<< "=======3" << std::endl;
+            //  std::cout<< pos.transpose() << std::endl;
+          } else if(waypoints_list.size()>0){
+            pos = intermediate_stop_pose.head(3);
+            vel = intermediate_stop_pose.tail(3);
             Eigen::VectorXd k_y(1);
-            k_y << curr_yaw;
-            kf_yaw->update(k_y);
+            k_y <<  stop_yaw_angle;
+            kf_yaw->update(k_y); 
             previous_yaw = current_yaw;
             current_yaw =  kf_yaw->state()[0];
+          }else {
+            pos = stop_pose;
+            Eigen::VectorXd k_y(1);
+            k_y <<  stop_yaw_angle;
+            kf_yaw->update(k_y); 
+            previous_yaw = current_yaw;
+            current_yaw =  kf_yaw->state()[0];
+            vel.setZero();
           }
-          
+          // cout<< "========6"<< endl;
+          acc.setZero();
 
-          //  std::cout<< "=======3" << std::endl;
-          //  std::cout<< pos.transpose() << std::endl;
-        } else if(waypoints_list.size()>0){
-          pos = intermediate_stop_pose.head(3);
-          vel = intermediate_stop_pose.tail(3);
-          Eigen::VectorXd k_y(1);
-          k_y <<  stop_yaw_angle;
-          kf_yaw->update(k_y); 
-          previous_yaw = current_yaw;
-          current_yaw =  kf_yaw->state()[0];
-        }else {
-          pos = stop_pose;
-          Eigen::VectorXd k_y(1);
-          k_y <<  stop_yaw_angle;
-          kf_yaw->update(k_y); 
-          previous_yaw = current_yaw;
-          current_yaw =  kf_yaw->state()[0];
-          vel.setZero();
+          cmd.yaw = current_yaw;
+          cmd.header.stamp = time_now;
+          cmd.header.frame_id = "world";
+          cmd.trajectory_flag = hagen_msgs::PoseCommand::TRAJECTORY_STATUS_READY;
+          cmd.trajectory_id = traj_id;
+
+          cmd.position.x = pos(0);
+          cmd.position.y = pos(1);
+          cmd.position.z = pos(2);
+
+          cmd.state_vector.x = state_vec[0];
+          cmd.state_vector.y = state_vec[1];
+          cmd.state_vector.z = state_vec[2];
+          cmd.yaw_dot = state_vec[3];
+
+          cmd.velocity.x = vel(0);
+          cmd.velocity.y = vel(1);
+          cmd.velocity.z = vel(2);
+
+          cmd.acceleration.x = acc(0);
+          cmd.acceleration.y = acc(1);
+          cmd.acceleration.z = acc(2);
+          // cout<< "========7"<< endl;
+          // nav_msgs::Odometry current_vehicle_pose;
+          // std::unique_lock<std::mutex> guard(mutex_odom);
+          // current_vehicle_pose = odom;
+          // guard.unlock();
+          // vector<double> pose_at = {current_vehicle_pose.pose.pose.position.x, current_vehicle_pose.pose.pose.position.y, current_vehicle_pose.pose.pose.position.z
+          //                           , getYawFromQuat(current_vehicle_pose.pose.pose.orientation), current_vehicle_pose.twist.twist.linear.x, current_vehicle_pose.twist.twist.linear.y,
+          //                           current_vehicle_pose.twist.twist.linear.z, current_vehicle_pose.twist.twist.angular.z};
+          // trees.push_back(pose_at);
+          // vector<double> pose_at1 = {cmd.position.x, cmd.position.y, cmd.position.z, cmd.yaw , cmd.velocity.x, cmd.velocity.y
+          //                                         , cmd.velocity.z, current_state.twist.twist.angular.z};
+          // trees_real.push_back(pose_at1);
+          // cout<< "========8"<< endl;
+          if(cmd.position.z > edt_env_->getMapCurrentRange()[0](2)){
+            pos_cmd_pub.publish(cmd);
+          }else{
+            // cout<< "Pose less than the minimum hight" << endl;
+          }
+          // cout<< "========9"<< endl;
+          visualization_->drawState(pos, vel, 50, Eigen::Vector4d(0.6, 1, 0.8, 1));
+          // cout<< "========101"<< endl;
+          traj_cmd->push_back(pos);
+          // cout<< "========11"<< endl;
+          // cout<< "========12"<< endl;
         }
-        // cout<< "========6"<< endl;
-        acc.setZero();
+      }
+      else
+      {
+        granted_execution = false;
+        trajectroy_regulator->force_terminate = true;
 
-        cmd.yaw = current_yaw;
-        cmd.header.stamp = time_now;
-        cmd.header.frame_id = "world";
-        cmd.trajectory_flag = hagen_msgs::PoseCommand::TRAJECTORY_STATUS_READY;
-        cmd.trajectory_id = traj_id;
-
-        cmd.position.x = pos(0);
-        cmd.position.y = pos(1);
-        cmd.position.z = pos(2);
-
-        cmd.state_vector.x = state_vec[0];
-        cmd.state_vector.y = state_vec[1];
-        cmd.state_vector.z = state_vec[2];
-        cmd.yaw_dot = state_vec[3];
-
-        cmd.velocity.x = vel(0);
-        cmd.velocity.y = vel(1);
-        cmd.velocity.z = vel(2);
-
-        cmd.acceleration.x = acc(0);
-        cmd.acceleration.y = acc(1);
-        cmd.acceleration.z = acc(2);
-        // cout<< "========7"<< endl;
-        // nav_msgs::Odometry current_vehicle_pose;
-        // std::unique_lock<std::mutex> guard(mutex_odom);
-        // current_vehicle_pose = odom;
-        // guard.unlock();
-        // vector<double> pose_at = {current_vehicle_pose.pose.pose.position.x, current_vehicle_pose.pose.pose.position.y, current_vehicle_pose.pose.pose.position.z
-        //                           , getYawFromQuat(current_vehicle_pose.pose.pose.orientation), current_vehicle_pose.twist.twist.linear.x, current_vehicle_pose.twist.twist.linear.y,
-        //                           current_vehicle_pose.twist.twist.linear.z, current_vehicle_pose.twist.twist.angular.z};
-        // trees.push_back(pose_at);
-        // vector<double> pose_at1 = {cmd.position.x, cmd.position.y, cmd.position.z, cmd.yaw , cmd.velocity.x, cmd.velocity.y
-        //                                         , cmd.velocity.z, current_state.twist.twist.angular.z};
-        // trees_real.push_back(pose_at1);
-        // cout<< "========8"<< endl;
-        if(cmd.position.z > edt_env_->getMapCurrentRange()[0](2)){
-          pos_cmd_pub.publish(cmd);
-        }else{
-          // cout<< "Pose less than the minimum hight" << endl;
+        std::cout <<"Execute Rotation" << std::endl;
+        for(int i=0; i<360; i+=10)
+        {
+          std::cout << "publish angle" << i << std::endl;
+          geometry_msgs::PoseStamped goal = drone_rotate(i);
+          while(!orientation_reached(goal))
+          {
+            rotate_pub.publish(goal);
+          }          
         }
-        // cout<< "========9"<< endl;
-        visualization_->drawState(pos, vel, 50, Eigen::Vector4d(0.6, 1, 0.8, 1));
-        // cout<< "========101"<< endl;
-        traj_cmd->push_back(pos);
-        // cout<< "========11"<< endl;
-        // cout<< "========12"<< endl;
+
+        std::cout <<"Rotation done" << std::endl;
+        rotate = false;
+
       }
       t1 =  clock();
     }else{

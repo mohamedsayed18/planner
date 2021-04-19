@@ -36,10 +36,70 @@
 #include <mpc_opt/bspline_utils.h>
 #include <boost/circular_buffer.hpp>
 
+#include <tf2/LinearMath/Quaternion.h>
+#include <angles/angles.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
 using std::vector;
 
 namespace hagen_planner
 {
+  bool rotate = false;
+
+  bool orientation_reached(geometry_msgs::PoseStamped goal)
+  {
+    /*
+    TODO: We can subscribe to the /planning/current_state, or /mavros/odometry
+    */
+    boost::shared_ptr<geometry_msgs::PoseStamped const> temp_pose =  ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/mavros/local_position/pose");
+    geometry_msgs::PoseStamped position = *(temp_pose);
+    double x = tf::getYaw(position.pose.orientation);
+    if(x<0)
+    {
+      x = x + 6.28319;  // make the angle defined in positive
+    }
+    double y = tf::getYaw(goal.pose.orientation);
+    if(y<0)
+    {
+      y = y + 6.28319;
+    }
+
+    if(x >= y)
+    {
+      std::cout << "Angle desired " << y << std::endl;
+      std::cout << "Angle achieved " << x << std::endl;
+      return true;
+    }
+      
+    else
+      return false;
+  }
+
+  geometry_msgs::PoseStamped drone_rotate(int degree)
+  {
+    /* 
+    Do 360 degree
+    */
+    std::cout << "********Drone Rotate Function********" << std::endl;
+    boost::shared_ptr<geometry_msgs::PoseStamped const> d_pose =  ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/mavros/local_position/pose");
+    geometry_msgs::PoseStamped position = *(d_pose);
+    geometry_msgs::Quaternion current_orientation = position.pose.orientation;
+
+    
+    // Set the angle to rotate
+    double x = tf::getYaw(current_orientation);
+    tf2::Quaternion angle;
+    double rad_angle = angles::from_degrees(10);
+    angle.setRPY(0, 0, x + rad_angle);
+    geometry_msgs::Quaternion myangle = tf2::toMsg(angle);
+
+    // Add the angle to the current orientation
+    //geometry_msgs::Quaternion target_orientation = current_orientation + myangle;
+    position.pose.orientation = myangle;
+        
+    return position;
+  }
+
 class FSM_Trajectory_Point_Stabilizer
 {
 private:
@@ -79,7 +139,7 @@ private:
 
   ros::Subscriber waypoint_sub_, odometry_sub_, rc_sub, vehicle_current_pose_sub_, stop_execution_sub_, continue_execution_sub_;
 
-  ros::Publisher replan_pub_, bspline_pub_, wait_for_goal, stat_moving, stop_moving, pos_cmd_pub, state_pub;
+  ros::Publisher replan_pub_, bspline_pub_, wait_for_goal, stat_moving, stop_moving, pos_cmd_pub, state_pub, rotate_pub;
 
   void execFSMCallback(const ros::TimerEvent& e);
   void safetyCallback(const ros::TimerEvent& e);
