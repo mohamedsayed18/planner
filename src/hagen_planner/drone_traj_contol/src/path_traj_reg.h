@@ -31,6 +31,13 @@
 #include <hagen_msgs/PoseCommand.h>
 #include <std_msgs/Empty.h>
 
+#include <tf2/LinearMath/Quaternion.h>
+#include <angles/angles.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <std_msgs/Bool.h>
+
+ros::Publisher roto_pub, roto_done;
+
 /*----Глобальные переменные----*/
 
 // Коэффициенты регулятора

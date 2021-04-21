@@ -87,6 +87,7 @@ void FSM_Trajectory_Point_Stabilizer::init(ros::NodeHandle& nh)
   pos_cmd_pub = node_.advertise<hagen_msgs::PoseCommand>("/planning/pos_cmd", 50);
 
   rotate_pub = node_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 50);
+  rotate_done = node_.advertise<std_msgs::Bool>("/check/rotation", 10);
 
   Eigen::MatrixXd k_A(1, 1); // System dynamics matrix
   Eigen::MatrixXd k_C(1, 1); // Output matrix
@@ -621,7 +622,11 @@ void FSM_Trajectory_Point_Stabilizer::cmdExecutor() {
       {
         granted_execution = false;
         trajectroy_regulator->force_terminate = true;
-
+/*
+        hagen_msgs::PoseCommand roto;
+        roto.header.frame_id = "rotate";
+        pos_cmd_pub.publish(roto);
+*/
         std::cout <<"Execute Rotation" << std::endl;
         for(int i=0; i<360; i+=10)
         {
@@ -634,6 +639,10 @@ void FSM_Trajectory_Point_Stabilizer::cmdExecutor() {
         }
 
         std::cout <<"Rotation done" << std::endl;
+        std_msgs::Bool rot_done;
+        rot_done.data = true;
+        rotate_done.publish(rot_done);
+
         rotate = false;
 
       }

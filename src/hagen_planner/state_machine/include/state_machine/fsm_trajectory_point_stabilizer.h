@@ -25,6 +25,8 @@
 #include "nav_msgs/Odometry.h"
 #include "hagen_msgs/PoseCommand.h"
 #include "std_msgs/Empty.h"
+#include "std_msgs/Bool.h"
+
 #include "visualization_msgs/Marker.h"
 #include <geometry_msgs/TwistStamped.h>
 #include <ros/callback_queue.h>
@@ -139,7 +141,7 @@ private:
 
   ros::Subscriber waypoint_sub_, odometry_sub_, rc_sub, vehicle_current_pose_sub_, stop_execution_sub_, continue_execution_sub_;
 
-  ros::Publisher replan_pub_, bspline_pub_, wait_for_goal, stat_moving, stop_moving, pos_cmd_pub, state_pub, rotate_pub;
+  ros::Publisher replan_pub_, bspline_pub_, wait_for_goal, stat_moving, stop_moving, pos_cmd_pub, state_pub, rotate_pub, rotate_done;
 
   void execFSMCallback(const ros::TimerEvent& e);
   void safetyCallback(const ros::TimerEvent& e);

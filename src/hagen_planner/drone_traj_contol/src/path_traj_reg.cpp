@@ -2,6 +2,74 @@
 
 using namespace std;
 
+bool orientation_reached(geometry_msgs::PoseStamped goal)
+{
+    /*
+    TODO: We can subscribe to the /planning/current_state, or /mavros/odometry
+    */
+    boost::shared_ptr<geometry_msgs::PoseStamped const> temp_pose =  ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/mavros/local_position/pose");
+    geometry_msgs::PoseStamped position = *(temp_pose);
+    double x = tf::getYaw(position.pose.orientation);
+    if(x<0)
+    {
+      x = x + 6.28319;  // make the angle defined in positive
+    }
+    double y = tf::getYaw(goal.pose.orientation);
+    if(y<0)
+    {
+      y = y + 6.28319;
+    }
+
+    if(x >= y)
+    {
+      std::cout << "Angle desired " << y << std::endl;
+      std::cout << "Angle achieved " << x << std::endl;
+      return true;
+    }
+      
+    else
+      return false;
+}
+
+geometry_msgs::PoseStamped drone_rotate(int degree)
+{
+    /* 
+    Do 360 degree
+    */
+    std::cout << "********Drone Rotate Function********" << std::endl;
+    boost::shared_ptr<geometry_msgs::PoseStamped const> d_pose =  ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/mavros/local_position/pose");
+    geometry_msgs::PoseStamped position = *(d_pose);
+    geometry_msgs::Quaternion current_orientation = position.pose.orientation;
+
+
+    // Set the angle to rotate
+    double x = tf::getYaw(current_orientation);
+    tf2::Quaternion angle;
+    double rad_angle = angles::from_degrees(10);
+    angle.setRPY(0, 0, x + rad_angle);
+    geometry_msgs::Quaternion myangle = tf2::toMsg(angle);
+
+    // Add the angle to the current orientation
+    //geometry_msgs::Quaternion target_orientation = current_orientation + myangle;
+    position.pose.orientation = myangle;
+        
+    return position;
+}
+
+void round_go()
+{
+    std::cout <<"Execute Rotation" << std::endl;
+    for(int i=0; i<360; i+=10)
+    {
+        std::cout << "publish angle" << i << std::endl;
+        geometry_msgs::PoseStamped goal = drone_rotate(i);  //TODO this parameter is fake better remove it
+        while(!orientation_reached(goal))
+        {
+        roto_pub.publish(goal);
+        }          
+    }
+}
+
 void cfg_callback(drone_traj_contol::DroneRegConfig &config, uint32_t level) {
     // dynamic_reconfigurate callback
 
@@ -108,6 +176,11 @@ void goal_cb(const hagen_msgs::PoseCommand &data) {
     goal_timer = 0.0;
     is_goal_is_set = true;
     // goal_yaw = data.yaw;
+
+    if(data.header.frame_id == "rotate")
+    {
+        round_go();
+    }
 }
 
 void goal_ps_cb(const geometry_msgs::PoseStamped &data) {
@@ -288,7 +361,7 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "drone_reg_vel_node");
     ros::NodeHandle n("~");
     ros::Rate loop_rate(30);
-    ros::Publisher vel_pub, pub_marker;
+    ros::Publisher vel_pub, pub_marker, roto_pub, roto_done;
     ros::Subscriber goalSub, navPosSub, navVelSub, stateSub, exStateSub, velFieldSub, altSonarSub, goal_ps_Sub
         , stopping_sub, starting_sub;
     if (n.getParam("yaml_path", yaml_path))
@@ -318,6 +391,10 @@ int main(int argc, char** argv) {
     navPosSub = n.subscribe(local_pose_topic, queue_size, nav_pos_cb);
     vel_pub = n.advertise<geometry_msgs::TwistStamped> (mavros_root + "/setpoint_velocity/cmd_vel", queue_size);
     pub_marker = n.advertise<visualization_msgs::Marker> ("/marker_reg_point", queue_size);
+
+    roto_pub = n.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 50);
+    roto_done = n.advertise<std_msgs::Bool>("/check/rotation", 10);
+
     geometry_msgs::TwistStamped ctr_msg;
     double old_time = ros::Time::now().toSec();
     double dt = 0.0;
