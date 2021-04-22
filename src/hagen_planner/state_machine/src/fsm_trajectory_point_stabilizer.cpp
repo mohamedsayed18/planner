@@ -622,12 +622,15 @@ void FSM_Trajectory_Point_Stabilizer::cmdExecutor() {
       {
         granted_execution = false;
         trajectroy_regulator->force_terminate = true;
-/*
+
         hagen_msgs::PoseCommand roto;
         roto.header.frame_id = "rotate";
         pos_cmd_pub.publish(roto);
-*/
-        std::cout <<"Execute Rotation" << std::endl;
+
+        std::cout <<"Message sent to regulator" << std::endl;
+        ros::topic::waitForMessage<std_msgs::Bool>("/check/rotation");
+        rotate = false;
+/*
         for(int i=0; i<360; i+=10)
         {
           std::cout << "publish angle" << i << std::endl;
@@ -642,8 +645,8 @@ void FSM_Trajectory_Point_Stabilizer::cmdExecutor() {
         std_msgs::Bool rot_done;
         rot_done.data = true;
         rotate_done.publish(rot_done);
+*/
 
-        rotate = false;
 
       }
       t1 =  clock();

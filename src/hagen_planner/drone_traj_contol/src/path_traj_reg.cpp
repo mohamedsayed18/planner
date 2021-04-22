@@ -2,6 +2,8 @@
 
 using namespace std;
 
+bool rot_exec = false;
+
 bool orientation_reached(geometry_msgs::PoseStamped goal)
 {
     /*
@@ -68,6 +70,10 @@ void round_go()
         roto_pub.publish(goal);
         }          
     }
+    std::cout <<"Rotation done" << std::endl;
+    std_msgs::Bool rot_done;
+    rot_done.data = true;
+    roto_done.publish(rot_done);
 }
 
 void cfg_callback(drone_traj_contol::DroneRegConfig &config, uint32_t level) {
@@ -171,16 +177,24 @@ void nav_pos_cb(const geometry_msgs::PoseStampedConstPtr &data) {
 }
 
 void goal_cb(const hagen_msgs::PoseCommand &data) {
+
+    //std::cout << "goal_cb callback" << std::endl;
+    if(data.header.frame_id == "rotate")
+    {
+        std::cout << "Rotate @ regulator" << std::endl;
+        rot_exec = true;
+    }
+    if(rot_exec)
+    {
+        round_go();
+        rot_exec = false;
+    }
+
     // goal_pose callback
     goal = data;
     goal_timer = 0.0;
     is_goal_is_set = true;
     // goal_yaw = data.yaw;
-
-    if(data.header.frame_id == "rotate")
-    {
-        round_go();
-    }
 }
 
 void goal_ps_cb(const geometry_msgs::PoseStamped &data) {
@@ -361,7 +375,7 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "drone_reg_vel_node");
     ros::NodeHandle n("~");
     ros::Rate loop_rate(30);
-    ros::Publisher vel_pub, pub_marker, roto_pub, roto_done;
+    ros::Publisher vel_pub, pub_marker;
     ros::Subscriber goalSub, navPosSub, navVelSub, stateSub, exStateSub, velFieldSub, altSonarSub, goal_ps_Sub
         , stopping_sub, starting_sub;
     if (n.getParam("yaml_path", yaml_path))
@@ -418,7 +432,7 @@ int main(int argc, char** argv) {
             ctr_msg.twist.angular.z = angle;
         }
         if (pose_timer < pose_lost_time){
-            std::cout<<  ctr_msg.twist.linear.x << ","<<  ctr_msg.twist.linear.y << "," <<  ctr_msg.twist.linear.z << "," << ctr_msg.twist.angular.z << std::endl;
+            //std::cout<<  ctr_msg.twist.linear.x << ","<<  ctr_msg.twist.linear.y << "," <<  ctr_msg.twist.linear.z << "," << ctr_msg.twist.angular.z << std::endl;
             vel_pub.publish(ctr_msg);
         }else {
             if (print_timer > print_delay) {
